@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "secure-file-storage-system"
+version = "1.0.0"
+description = "Secure File Storage System with GitHub OAuth and AES Encryption"
+authors = ["Your Name <your.email@example.com>"]
+
+[tool.poetry.dependencies]
+python = "3.8"  # <- Locked to 3.8
+requests = "^2.31.0"
+cryptography = "^41.0.0"
+python-dotenv = "^1.0.0"
+click = "^8.0.0"
+
