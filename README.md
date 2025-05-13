@@ -1,6 +1,11 @@
 # Secure File Storage System (SFSS)
+[![SFSS](https://img.shields.io/badge/SFSS-Secure_File_Storage-black?logo=github)](https://github.com/hnaung/SFSS)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
-![Tests](https://img.shields.io/badge/tests-100%25%20coverage-success)
+[![Auth: GitHub OAuth Device Flow](https://img.shields.io/badge/Auth-GitHub_OAuth_Device_Flow-blue)](https://docs.github.com/en/developers/apps/building-oauth-apps/authorizing-oauth-apps#device-flow)
+![Security: AES-256-GCM](https://img.shields.io/badge/Security-AES--256--GCM-brightgreen)
+[![Storage: Secure Metadata](https://img.shields.io/badge/Storage-Encrypted_Metadata_%26_Keys-important)](https://github.com/hnaung/SFSS/tree/master#security-considerations)
+[![Sessions: Fernet Encrypted](https://img.shields.io/badge/Sessions-Fernet_Encrypted-yellowgreen)](https://github.com/fernet/spec)
+[![Audit: Masked Logging](https://img.shields.io/badge/Audit-Masked_Logs_%2B_Rotation-blueviolet)](https://github.com/hnaung/SFSS/blob/master/src/utils/logger.py)
 ---
 ## Current Features
 - **Authentication**: GitHub OAuth Device Flow Authentication
