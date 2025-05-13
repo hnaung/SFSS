@@ -63,7 +63,7 @@ The OAuth Flow outlines how user authentication is handled via GitHub OAuth in t
     - The access token is securely wiped from the system.
 
 **OAuthFlow**  
-<img src="./OAuthFlow.png" alt="OAuth Flow" width="600"/>
+<img src="./OAuthFlow.png" alt="OAuth" width="600"/>
 
 ## **High-Level Design (HLD)**
 
@@ -161,9 +161,7 @@ The High-Level Design represents the major components of the **Secure File Stora
     - **Session Clear** → Securely wipes the session from storage.
 
 **Location:** `src/utils/session_handler.py`
-
 ---
-
 ### 6. **Logger Service**
 - Manages secure logging with:
     - **Sensitive Data Masking** (e.g., secrets, tokens).
@@ -172,9 +170,7 @@ The High-Level Design represents the major components of the **Secure File Stora
 - Ensures logs are tamper-proof and readable only with appropriate permissions.
 
 **Location:** `src/utils/logger.py`
-
 ---
-
 ### 7. **Rate Limiter Service**
 - Protects the system from abuse by:
     - **Limiting CLI command executions** to prevent brute force attempts.
@@ -182,9 +178,7 @@ The High-Level Design represents the major components of the **Secure File Stora
     - Ensuring fair usage for multi-session environments.
 
 **Location:** `src/utils/rate_limiter.py`
-
 ---
-
 ### 8. **Validation Service**
 - Ensures all file paths and filenames are validated securely before processing:
     - Prevents **Path Traversal Attacks**.
@@ -346,5 +340,4 @@ The **Secure File Storage System (SFSS)** enforces multiple layers of security t
        - **Masked sensitive data**
        - **Rotating logs** to prevent log overflow
        - Strict access control to log files
-
 ---
