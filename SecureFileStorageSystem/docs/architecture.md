@@ -8,7 +8,7 @@ retrieving files using AES-256 encryption and GitHub OAuth for
 authentication. This document outlines the architectural design,
 including:
 
--   **oAuth Flow** --- Overview of oAuth Github Authentication flow.
+-   **OAuth Flow** --- Overview of OAuth Github Authentication flow.
 
 -   **High-Level Design (HLD)** --- Overview of core components.
 
@@ -62,44 +62,146 @@ The OAuth Flow outlines how user authentication is handled via GitHub OAuth in t
 
     - The access token is securely wiped from the system.
 
-**Diagram:** 
-![oAuthFlow](./oAuthflow.png)
+**OAuthFlow**  
+<img src="./OAuthFlow.png" alt="OAuth Flow" width="600"/>
 
 ## **High-Level Design (HLD)**
 
-The High-Level Design represents the major components of the SFSS and
-their relationships. The primary components are:
+The High-Level Design represents the major components of the **Secure File Storage System (SFSS)** and their interactions. The primary components are:
 
-1.  **Auth Service (GitHub OAuth)**
+---
 
-    -   Manages user authentication using OAuth 2.0.
+### 1. **Auth Service (GitHub OAuth Device Flow)**
+- Manages user authentication securely using **GitHub OAuth Device Flow**.
+- Generates **access tokens** upon successful authorization.
+- Tokens are securely stored and managed within the session handler.
+**Location:** `src/auth/github_oauth.py`
+---
 
-    -   Issues tokens for session management.
+### 2. **Encryption/Decryption Service**
+- Manages **secure file encryption and decryption** using **AES-256-GCM** with HMAC validation.
+- Ensures **confidentiality** and **integrity** of data through:
+    - AES-256 encryption with a **random IV** (Initialization Vector).
+    - HMAC-based integrity checks for tamper detection.
+- Supports **secure deletion** of sensitive files by:
+    - Overwriting the file with random data before removal.
 
-2.  **Storage Service (AES-256 Encryption)**
+**Core Functions:**
+- **generate_key()** → Creates a secure AES key and HMAC key.
+- **encrypt_file()** → Encrypts the contents of a file and stores the encrypted data.
+- **decrypt_file()** → Decrypts an encrypted file and verifies its integrity using HMAC.
+- **secure_delete()** → Overwrites and removes sensitive files securely.
 
-    -   Handles file encryption, decryption, and storage.
+**Location:** `src/storage/encryptor.py`
 
-    -   Ensures data is securely stored at rest.
+### 3. **File Manager Service**
+- Manages **file operations** for the Secure File Storage System (SFSS), including:
+    - **Upload:** Encrypts the file and stores it securely.
+    - **Download:** Decrypts the file for user access.
+    - **List:** Displays all securely stored files.
+    - **Delete:** Removes files securely along with associated metadata.
 
-3.  **File Manager**
+**Workflow:**
+1. **Upload Process:**
+   - Validates file path and file extension.
+   - Encrypts the file using **AES-256-GCM**.
+   - Generates and stores metadata (keys, IV, HMAC) securely.
+   - Saves the encrypted file in the **secure storage directory**.
 
-    -   Facilitates operations like upload, download, list, and delete.
+2. **Download Process:**
+   - Validates file existence.
+   - Decrypts the file using the stored keys and IV.
+   - Ensures integrity through HMAC verification.
 
-    -   Interfaces directly with encrypted storage.
+3. **Listing Files:**
+   - Lists all files stored in the secure directory.
+   - Displays decrypted filenames only (no raw encrypted file names).
 
-4.  **Logger Service**
+4. **Deletion Process:**
+   - Deletes the encrypted file and associated metadata.
+   - Uses **secure delete** to wipe file data before removal.
 
-    -   Logs activities securely with sensitive data masking.
+**Core Functions:**
+- **upload_file()** → Securely uploads and encrypts a file.
+- **download_file()** → Decrypts and retrieves a file from secure storage.
+- **list_files()** → Lists all stored encrypted files.
+- **delete_file()** → Securely deletes a file and its metadata.
 
-    -   Supports both audit and event logging.
+**Location:** `src/storage/file_manager.py`
 
-5.  **Rate Limiter**
+### 4. **Metadata Handler Service**
+- Manages the **secure storage and retrieval of encryption keys, IVs, and HMAC values** for each encrypted file.
+- Ensures that encryption metadata is stored securely and only accessible to authorized processes.
 
-    -   Prevents abuse by limiting API calls.
+**Core Functions:**
+- **save_encryption_metadata()** → Stores encryption keys and IV securely.
+- **load_encryption_key()** → Retrieves the encryption key from local storage.
+- **load_hmac_key()** → Retrieves the HMAC key for integrity checks.
+- **load_iv()** → Loads the Initialization Vector (IV) for decryption.
+- **remove_encryption_metadata()** → Deletes metadata associated with a file after successful deletion.
 
-**Diagram:** 
-![HLD](./hld.png) 
+**Metadata Structure:**
+- Stored as a JSON file in the `~/.sfss/keys/` directory.
+- Each metadata file contains:
+    - **key** → AES encryption key (hex-encoded).
+    - **hmac_key** → HMAC key for integrity (hex-encoded).
+    - **iv** → Initialization Vector for GCM mode (hex-encoded).
+
+**Location:** `src/storage/metadata_handler.py`
+
+### 5. **Session Management Service**
+- Manages **session creation, storage, and expiration**.
+- Uses **Fernet symmetric encryption** to encrypt and decrypt session data.
+- Enforces **session expiry** based on predefined time in the `.env`.
+- Prevents session tampering by verifying integrity during decryption.
+- Handles:
+    - **Session Save** → Encrypts session data and saves it to disk.
+    - **Session Load** → Decrypts session data and validates it.
+    - **Session Refresh** → Extends the session expiration time.
+    - **Session Clear** → Securely wipes the session from storage.
+
+**Location:** `src/utils/session_handler.py`
+
+---
+
+### 6. **Logger Service**
+- Manages secure logging with:
+    - **Sensitive Data Masking** (e.g., secrets, tokens).
+    - **Rotating Logs** to avoid excessive log growth.
+    - **Audit Trails** for all critical operations (upload, delete, authentication).
+- Ensures logs are tamper-proof and readable only with appropriate permissions.
+
+**Location:** `src/utils/logger.py`
+
+---
+
+### 7. **Rate Limiter Service**
+- Protects the system from abuse by:
+    - **Limiting CLI command executions** to prevent brute force attempts.
+    - Tracking command counts and enforcing limits based on configured policies.
+    - Ensuring fair usage for multi-session environments.
+
+**Location:** `src/utils/rate_limiter.py`
+
+---
+
+### 8. **Validation Service**
+- Ensures all file paths and filenames are validated securely before processing:
+    - Prevents **Path Traversal Attacks**.
+    - Only allows **approved file extensions** to be uploaded or downloaded.
+    - Blocks access to sensitive system paths (e.g., `/etc`, `/bin`, `C:\Windows`).
+    - Sanitizes filenames to remove forbidden characters and null bytes.
+    - Validates maximum path length to avoid OS-level overflows.
+
+**Location:** `src/utils/validators.py`
+
+**Key Functions:**
+- `is_valid_path()`: Securely validates the path to prevent directory traversal.
+- `is_allowed_file_extension()`: Ensures only whitelisted file types are accepted.
+- `sanitize_filename()`: Cleans and normalizes filenames to prevent injections.
+
+**High Level Design**  
+<img src="./HLD.png" alt="High-Level Design" width="600"/>
 
 ## **Low-Level Design (LLD)**
 
@@ -146,55 +248,103 @@ each component:
 
 -   check_rate_limit(): Validates API usage to prevent abuse.
 
-**Diagram:** 
-![LLD](./lld.png)
+**Low Level Design**  
+![LLD](./LLD.png)
 
-## **Data Flow**
+### **Data Flow Overview**
+The **sfss_cli.py** serves as the **entry point** for all user commands. It handles:
+- **Session Validation** → Verifies user authentication before any action.
+- **Command Execution** → Triggers the appropriate service (`upload`, `download`, `list`, `delete`).
+- **Error Handling and Logging** → Manages errors gracefully and logs every action.
 
-The Data Flow diagram represents the sequence of operations for each
-major feature of the SFSS:
+---
+### **CLI Command Flow**
+1. **User Input →** The user executes a command like `sfss upload <file_path>`.
+2. **Session Verification →** The CLI checks for a valid OAuth session.
+3. **Command Routing →** 
+   - If valid, it routes the request to the correct handler:
+     - Upload → `upload_file()` in `file_manager.py`
+     - Download → `download_file()` in `file_manager.py`
+     - List → `list_files()` in `file_manager.py`
+     - Delete → `delete_file()` in `file_manager.py`
+4. **Action Logging →** All actions are logged for traceability and auditing.
+5. **Output Display →** CLI provides real-time feedback to the user.
 
-### **File Upload Process**
+**Data Flow**  
+<img src="./DataFlow.png" alt="Data Flow" width="600"/>
 
-1.  User authenticates using GitHub OAuth.
+---
+### 9. **Command Line Interface (CLI) - src/sfss_cli.py**
+- The `sfss_cli.py` is the main interface for interacting with the **Secure File Storage System (SFSS)**.
+- It provides a **command-driven interface** for performing secure file operations and session management.
 
-2.  CLI triggers the upload() command.
+**Core Commands:**
+- **sfss login** → Initiates the GitHub OAuth Device Flow for authentication.
+- **sfss logout** → Clears the current OAuth session and removes credentials.
+- **sfss status** → Displays the current session status.
+- **sfss upload <file_path>** → Encrypts and uploads the specified file.
+- **sfss download <file_name> <output_path>** → Decrypts and downloads the specified file.
+- **sfss list** → Lists all encrypted files currently in secure storage.
+- **sfss delete <file_name>** → Securely deletes the specified file.
 
-3.  File is encrypted with AES-256.
+**Internal Interactions:**
+- **OAuth Authentication** → Uses `github_oauth.py` for login and session management.
+- **File Operations** → Interacts with `file_manager.py` for upload, download, list, and delete.
+- **Session Handling** → Validates user session before any action.
+- **Logging** → Logs every command execution with proper event tracking.
 
-4.  Encrypted file is stored securely.
-
-5.  Event is logged for auditing.
-
-### **File Download Process**
-
-1.  User requests the file via CLI.
-
-2.  OAuth authentication is validated.
-
-3.  File is decrypted and served to the user.
-
-4.  Access event is logged securely.
-
-### **File Deletion Process**
-
-1.  User issues a delete command.
-
-2.  OAuth session is verified.
-
-3.  File is securely deleted from storage.
-
-4.  Action is recorded in logs.
-
-**Diagram:** 
-![DataFlow](./dataflow.png)
-
+**Location:** `src/sfss_cli.py`
+---
+### **Interaction Overview**
+| Component                 | Interacts With                 | Purpose                              |
+|----------------------------|--------------------------------|--------------------------------------|
+| **CLI Interface**         | File Manager, OAuth Service, Session Handler | Main entry point for user interactions |
+| **Auth Service**          | GitHub OAuth API               | User Authentication                  |
+| **Encryption Service**    | File Manager, Metadata Handler | Encrypts and decrypts file contents  |
+| **File Manager**          | Encryption Service, Metadata Handler | Manages file operations and storage  |
+| **Session Management**    | Auth Service, File Manager     | Secure session storage and refresh   |
+| **Logger Service**        | All Components                 | Audit logging and error tracking     |
+| **Rate Limiter**          | CLI Commands                   | Prevents abuse and brute force       |
+| **Validation Service**    | File Manager, Storage Service  | Path and filename validation         |
+| **Metadata Handler**      | Encryption Service, File Manager | Stores and retrieves encryption keys |
 ## **Security Considerations**
 
--   OAuth 2.0 for secure authentication.
+The **Secure File Storage System (SFSS)** enforces multiple layers of security to protect both data and operations:
 
--   AES-256 for file encryption.
+### **1. OAuth 2.0 Device Flow Authentication**
+   - Uses GitHub's **Device Flow** for secure, CLI-based authentication.
+   - Prevents unauthorized access with secure token handling.
 
--   Masked logging for privacy.
+### **2. AES-256-GCM File Encryption**
+   - Ensures that files are encrypted with **AES-256** before storage.
+   - Galois/Counter Mode (GCM) provides both **encryption** and **integrity checks**.
+   - Uses **HMAC (SHA-256)** to prevent tampering.
 
--   Rate Limiting to prevent abuse.
+### **3. Session Management and Expiry**
+   - Encrypted sessions are stored locally using **Fernet symmetric encryption**.
+   - Sessions expire automatically based on environment settings to limit exposure.
+
+### **4. Path and Filename Validation**
+   - Prevents:
+       - **Path traversal attacks**
+       - **Access to restricted directories**
+       - **Null byte and path injection vulnerabilities**
+   - Sanitizes filenames to prevent unauthorized modifications.
+
+### **5. Secure Metadata Storage**
+   - Encryption keys, HMAC keys, and IVs are stored securely in:
+       - `~/.sfss/keys/`
+   - Protected with strict file permissions (`600`).
+
+### **6. Rate Limiting**
+   - Enforces rate limits on CLI commands to:
+       - Prevent brute force attacks.
+       - Limit abuse of the upload, download, and delete functionalities.
+
+### **7. Secure Audit Logging**
+   - All events are logged with:
+       - **Masked sensitive data**
+       - **Rotating logs** to prevent log overflow
+       - Strict access control to log files
+
+---
