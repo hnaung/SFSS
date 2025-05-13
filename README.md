@@ -68,7 +68,7 @@ sfss upload <file_path>
 sfss list
 
 # Download a file
-sfss download <file_name>
+sfss download <file_name> <download_file_name>
 
 # Delete a file
 sfss delete <file_name>
